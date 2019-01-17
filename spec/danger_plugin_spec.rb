@@ -41,7 +41,28 @@ module Danger
           allow(@swiftlint.git).to receive(:added_files).and_return([])
           allow(@swiftlint.git).to receive(:modified_files).and_return([])
 
-          @swiftlint_response = '[{ "rule_id" : "force_cast", "reason" : "Force casts should be avoided.", "character" : 19, "file" : "/Users/me/this_repo/spec//fixtures/SwiftFile.swift", "severity" : "Error", "type" : "Force Cast", "line" : 13 }]'
+          @swiftlint_response = <<-eos
+[
+  {
+    "rule_id" : "opening_brace",
+    "reason" : "Opening braces should be preceded by a single space and on the same line as the declaration.",
+    "character" : 1,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity" : "Warning",
+    "type" : "Opening Brace Spacing",
+    "line" : 10
+  },
+  {
+    "rule_id": "force_cast",
+    "reason": "Force casts should be avoided.",
+    "character": 19,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity": "Error",
+    "type": "Force Cast",
+    "line": 13
+  }
+]
+          eos
         end
 
         after(:each) do
@@ -50,7 +71,7 @@ module Danger
 
         it 'specifies --force-exclude when invoking SwiftLint' do
           expect_any_instance_of(Swiftlint).to receive(:lint)
-            .with(hash_including(force_exclude: ''), '')
+            .with(hash_including(force_exclude: true), '')
             .and_return(@swiftlint_response)
 
           @swiftlint.lint_files('spec/fixtures/*.swift')
@@ -300,6 +321,100 @@ module Danger
           @swiftlint.lint_files
         end
 
+        it 'fails on errors if fail_on_error' do
+          allow_any_instance_of(Swiftlint).to receive(:lint)
+            .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
+            .and_return(@swiftlint_response)
+
+          @swiftlint.lint_files('spec/fixtures/*.swift', fail_on_error: true, additional_swiftlint_args: '')
+
+          status = @swiftlint.status_report
+          expect(status[:warnings]).to be_empty
+          expect(status[:errors]).to_not be_empty
+          expect(status[:markdowns]).to_not be_empty
+        end
+
+        it 'does not fail on warnings' do
+          swiftlint_response = <<-eos
+[
+  {
+    "rule_id" : "opening_brace",
+    "reason" : "Opening braces should be preceded by a single space and on the same line as the declaration.",
+    "character" : 1,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity" : "Warning",
+    "type" : "Opening Brace Spacing",
+    "line" : 10
+  }
+]
+        eos
+          
+          allow_any_instance_of(Swiftlint).to receive(:lint)
+            .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
+            .and_return(swiftlint_response)
+
+          @swiftlint.lint_files('spec/fixtures/*.swift', additional_swiftlint_args: '')
+
+          status = @swiftlint.status_report
+          expect(status[:warnings]).to be_empty
+          expect(status[:errors]).to be_empty
+          expect(status[:markdowns]).to_not be_empty
+        end
+
+        it 'does not fail on warnings when warnings_as_errors enabled but fail_on_error disabled' do
+          swiftlint_response = <<-eos
+[
+  {
+    "rule_id" : "opening_brace",
+    "reason" : "Opening braces should be preceded by a single space and on the same line as the declaration.",
+    "character" : 1,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity" : "Warning",
+    "type" : "Opening Brace Spacing",
+    "line" : 10
+  }
+]
+        eos
+          
+          allow_any_instance_of(Swiftlint).to receive(:lint)
+            .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
+            .and_return(swiftlint_response)
+
+          @swiftlint.lint_files('spec/fixtures/*.swift', warnings_as_errors: true, additional_swiftlint_args: '')
+
+          status = @swiftlint.status_report
+          expect(status[:warnings]).to be_empty
+          expect(status[:errors]).to be_empty
+          expect(status[:markdowns]).to_not be_empty
+        end
+
+        it 'fails on warnings when warnings_as_errors enabled and fail_on_error' do
+          swiftlint_response = <<-eos
+[
+  {
+    "rule_id" : "opening_brace",
+    "reason" : "Opening braces should be preceded by a single space and on the same line as the declaration.",
+    "character" : 1,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity" : "Warning",
+    "type" : "Opening Brace Spacing",
+    "line" : 10
+  }
+]
+        eos
+          
+          allow_any_instance_of(Swiftlint).to receive(:lint)
+            .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
+            .and_return(swiftlint_response)
+
+          @swiftlint.lint_files('spec/fixtures/*.swift', fail_on_error: true, warnings_as_errors: true, additional_swiftlint_args: '')
+
+          status = @swiftlint.status_report
+          expect(status[:warnings]).to be_empty
+          expect(status[:errors]).to_not be_empty
+          expect(status[:markdowns]).to_not be_empty
+        end
+
         it 'generates errors/warnings instead of markdown when use inline mode' do
           allow_any_instance_of(Swiftlint).to receive(:lint)
             .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
@@ -308,7 +423,8 @@ module Danger
           @swiftlint.lint_files('spec/fixtures/*.swift', inline_mode: true, additional_swiftlint_args: '')
 
           status = @swiftlint.status_report
-          expect(status[:errors] + status[:warnings]).to_not be_empty
+          expect(status[:warnings]).to_not be_empty
+          expect(status[:errors]).to be_empty
           expect(status[:markdowns]).to be_empty
         end
 
@@ -320,6 +436,32 @@ module Danger
           @swiftlint.lint_files('spec/fixtures/*.swift', inline_mode: true, fail_on_error: true, additional_swiftlint_args: '')
 
           status = @swiftlint.status_report
+          expect(status[:errors]).to_not be_empty
+        end
+
+        it 'generate errors from warnings in inline_mode when fail_on_error and warnings_as_errors' do
+          swiftlint_response = <<-eos
+[
+  {
+    "rule_id" : "opening_brace",
+    "reason" : "Opening braces should be preceded by a single space and on the same line as the declaration.",
+    "character" : 1,
+    "file": "/Users/me/this_repo/spec//fixtures/SwiftFile.swift",
+    "severity" : "Warning",
+    "type" : "Opening Brace Spacing",
+    "line" : 10
+  }
+]
+          eos
+
+          allow_any_instance_of(Swiftlint).to receive(:lint)
+            .with(hash_including(path: File.expand_path('spec/fixtures/SwiftFile.swift')), '')
+            .and_return(swiftlint_response)
+
+          @swiftlint.lint_files('spec/fixtures/*.swift', warnings_as_errors: true, inline_mode: true, fail_on_error: true, additional_swiftlint_args: '')
+
+          status = @swiftlint.status_report
+          expect(status[:warnings]).to be_empty
           expect(status[:errors]).to_not be_empty
         end
 

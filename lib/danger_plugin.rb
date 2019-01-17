@@ -48,7 +48,7 @@ module Danger
     #          if nil, modified and added files from the diff will be used.
     # @return  [void]
     #
-    def lint_files(files = nil, inline_mode: false, fail_on_error: false, additional_swiftlint_args: '')
+    def lint_files(files = nil, inline_mode: false, warnings_as_errors: false, fail_on_error: false, additional_swiftlint_args: '')
       # Fails if swiftlint isn't installed
       raise 'swiftlint is not installed' unless swiftlint.installed?
 
@@ -86,7 +86,7 @@ module Danger
         reporter: 'json',
         quiet: true,
         pwd: dir_selected,
-        force_exclude: ''
+        force_exclude: true
       }
       log "linting with options: #{options}"
 
@@ -102,6 +102,11 @@ module Danger
       # Filter warnings and errors
       warnings = issues.select { |issue| issue['severity'] == 'Warning' }
       errors = issues.select { |issue| issue['severity'] == 'Error' }
+
+      if warnings_as_errors
+        errors += warnings
+        warnings = []
+      end
 
       if inline_mode
         # Report with inline comment
