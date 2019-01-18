@@ -91,7 +91,7 @@ module Danger
       log "linting with options: #{options}"
 
       # Lint each file and collect the results
-      issues = run_swiftlint(files, lint_all_files, options, additional_swiftlint_args)
+      issues, success = run_swiftlint(files, lint_all_files, options, additional_swiftlint_args)
       other_issues_count = 0
       unless @max_num_violations.nil?
         other_issues_count = issues.count - @max_num_violations if issues.count > @max_num_violations
@@ -102,6 +102,11 @@ module Danger
       # Filter warnings and errors
       warnings = issues.select { |issue| issue['severity'] == 'Warning' }
       errors = issues.select { |issue| issue['severity'] == 'Error' }
+
+      unless success
+        errors += warnings
+        warnings = []
+      end
 
       if inline_mode
         # Report with inline comment
@@ -128,19 +133,18 @@ module Danger
     # @return [Array] swiftlint issues
     def run_swiftlint(files, lint_all_files, options, additional_swiftlint_args)
       if lint_all_files
-        result = swiftlint.lint(options, additional_swiftlint_args)
+        result, status = swiftlint.lint(options, additional_swiftlint_args)
         if result == ''
           {}
         else
-          JSON.parse(result).flatten
+          [ JSON.parse(result).flatten, status.success? ]
         end
       else
         files
           .map { |file| options.merge(path: file) }
           .map { |full_options| swiftlint.lint(full_options, additional_swiftlint_args) }
-          .reject { |s| s == '' }
-          .map { |s| JSON.parse(s).flatten }
-          .flatten
+          .reject { |s, e| s == '' }
+          .inject([[], true]) { |out, result| [ out[0] + JSON.parse(result[0]).flatten, out[1] && result[1].success? ] }
       end
     end
 

@@ -2,5 +2,5 @@
 
 module DangerSwiftlint
   VERSION = '0.18.2'
-  SWIFTLINT_VERSION = '0.28.1'
+  SWIFTLINT_VERSION = '0.32.0'
 end

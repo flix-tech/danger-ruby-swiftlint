@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+
 # A wrapper to use SwiftLint via a Ruby API.
 class Swiftlint
   def initialize(swiftlint_path = nil)
@@ -12,7 +14,9 @@ class Swiftlint
     Dir.chdir options.delete(:pwd) if options.key? :pwd
 
     # run swiftlint with provided options
-    `#{swiftlint_path} #{cmd} #{swiftlint_arguments(options, additional_swiftlint_args)}`
+    expr = "#{swiftlint_path} #{cmd} #{swiftlint_arguments(options, additional_swiftlint_args)}"
+    puts "executing$ #{expr}"
+    Open3.capture2 expr
   end
 
   # Shortcut for running the lint command
